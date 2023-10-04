@@ -1,0 +1,170 @@
+---
+title: "HW_6"
+output: html_document
+---
+
+```{r}
+
+#1a)
+
+data_MC_excerpt <- aida::data_MC_cleaned %>% select(RT, block, submission_id)
+data_MC_excerpt
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+#1b)
+
+# mean of goNoGo RT is 127 ms higher than reaction mean
+(`goNoGo-reaction` <- (data_MC_excerpt %>% filter(block == "goNoGo") %>% summarize(mean_gr_dif = mean(RT))) - (data_MC_excerpt %>% filter(block == "reaction") %>% summarize(mean_gr_dif = mean(RT))))
+
+# mean of discrimination RT is 60 ms higher than goNoGo mean
+(`discrimination-goNoGo` <- (data_MC_excerpt %>% filter(block == "discrimination") %>% summarize(mean_dg_dif = mean(RT))) - (data_MC_excerpt %>% filter(block == "goNoGo") %>% summarize(mean_dg_dif = mean(RT))))
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+#1c)
+
+data_MC_excerpt <- data_MC_excerpt %>%
+mutate(
+#grand_mean = mean(`goNoGo-reaction`[match(unique(submission_id), submission_id)]),
+#grand_mean = case_when(endsWith(block, "o") ~ c(1/3), endsWith(block, "ction") ~ c(-2/3), endsWith(block, "ation") ~ c(-2/3)),
+#grand_mean = data_MC_excerpt %>% group_by(block) %>% summarize(means=mean(RT)) %>% select(means) %>% sum()/3,
+grand_mean = rep(1),
+`goNoGo-reaction` = case_when(endsWith(block, "o") ~ c(-2/3), endsWith(block, "ction") ~ c(1/3), endsWith(block, "ation") ~ c(1/3)),
+`discrimination-goNoGo` = case_when(endsWith(block, "o") ~ c(-1/3), endsWith(block, "ction") ~ c(-1/3), endsWith(block, "ation") ~ c(2/3)))
+data_MC_excerpt
+
+```
+
+```{r}
+
+#1d)
+
+#fit_temperature <- brm(
+# specify what to explain in terms of what
+# using the formula syntax
+# formula = avg_temp ~ year,
+# which data to use
+#data = aida::data_WorldTemp
+#)
+
+
+
+
+# dependent variable
+y <- data_MC_excerpt$RT
+# independent variable
+#x <- data_MC_excerp$block
+
+# the predictor 'intercept' is just a
+# column vector of ones of the same length as y
+#int <- rep(1, length(y))
+
+# create predictor matrix with values of all explanatory variables
+# (here only intercept and slope for MAD)
+#X <- matrix(c(int, x), ncol = 2)
+
+X <- as.matrix(data_MC_excerpt[, 4:6])
+colnames(X) <- c("mean", "beta1", "slope")
+
+# collect samples with convenience function
+samples_Bayes_regression <- aida::get_samples_regression_noninformative(X, y, 10000)
+samples_Bayes_regression
+
+```
+
+```{r}
+#1e)
+
+rbind(
+aida::summarize_sample_vector(samples_Bayes_regression$mean, "mean"),
+aida::summarize_sample_vector(samples_Bayes_regression$intercept,"beta1"),
+aida::summarize_sample_vector(samples_Bayes_regression$slope, "slope"),
+aida::summarize_sample_vector(samples_Bayes_regression$sigma, "sigma")
+)
+```
+
+````{r}
+#2a 
+
+IDA_data_KoF <- read_csv('data_KoF-IDA-2020.csv') %>% 
+  # discard practice trials
+  filter(type != "practice") %>% 
+  mutate(
+    # add a 'condition' variable
+    condition = case_when(
+      type == "special" ~ "background check",
+      type == "main" ~ str_c("Condition ", condition),
+      TRUE ~ "filler"
+    ) %>% 
+      factor( 
+        ordered = T,
+        levels = c(str_c("Condition ", c(0, 1, 6, 9, 10)), "background check", "filler")
+      )
+  ) %>% 
+  rename(correct_answer = correct)
+
+# remove data with more than 50 percent wrong answers in filler material
+KoF_clean <- IDA_data_KoF %>% group_by(submission_id) %>% filter(condition == "filler") %>% summarize (mean_correctness = mean(correct_answer == "TRUE")) %>% .[(.[,2]>0.5),] %>% merge(IDA_data_KoF)
+
+KoF_cleaner <- KoF_clean %>% filter(type == "special") %>% mutate( background_correct = correct_answer == response) %>% select(submission_id, background_correct) %>% right_join(KoF_clean, by = c("submission_id")) %>% filter(type == "main" & background_correct == TRUE)
+
+#count how many were excluded
+
+after_participants <- KoF_cleaner %>% group_by(submission_id) %>% nrow()
+before_participants <- IDA_data_KoF %>% group_by(submission_id) %>% nrow()
+before_participants - after_participants
+
+print(KoF_clean)
+
+```
+
+```{r}
+KoF_cleaner %>%
+ggplot(aes(x = submission_id, y = mean_correctness)) +
+geom_bar(stat = "identity", position = "dodge2")
+
+z = as.character(KoF_cleaner$condition)
+KoF_cleaner = KoF_cleaner %>% mutate(condition_neu = z) %>% select(-condition) 
+KoF_cleaner
+
+```
+
+```{r}
+
+# make condition a character vector
+
+Ko = KoF_cleaner %>% brm(
+formula = correctness ~ condition ,
+family = bernoulli(link = "logit"),
+data = KoF_cleaner %>%
+mutate(correctness = mean_correctness == 'correct'),
+prior = prior(student_t(1, 0, 2)),
+sample_prior = 'yes',
+iter = 20000
+)
+
+#add summary to show the summary in the output
+summary(Ko)
+```
+
+```{r}
+
+hypothesis(KoF_cleaner, "Condition.C >0")
+
+```
+

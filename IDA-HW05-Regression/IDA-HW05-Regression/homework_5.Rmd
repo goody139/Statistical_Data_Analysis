@@ -1,0 +1,76 @@
+---
+title: "HW_05"
+author: 'goody'
+output: html_document
+---
+
+```{r}
+data <- aida::data_MC_cleaned %>% select(RT, block) 
+data
+```
+
+
+
+```{r}
+
+data_MC_excerpt <- aida::data_MC_cleaned %>% select(RT, block) %>% group_by(block) %>% summarise(mean_reaction_time = mean(RT))
+data_MC_excerpt
+
+(`goNoGo-reaction`       <-  (data_MC_excerpt %>% filter(block == 'goNoGo') %>% pull(mean_reaction_time)) - (data_MC_excerpt %>% filter(block == 'reaction') %>% pull(mean_reaction_time)) )
+(`discrimination-goNoGo` <-  (data_MC_excerpt %>% filter(block == 'discrimination') %>% pull(mean_reaction_time)) - (data_MC_excerpt %>% filter(block == 'goNoGo') %>% pull(mean_reaction_time)) )
+
+
+```
+
+```{r}
+`discrimination-goNoGo`
+
+data_MC_excerpt <- data_MC_excerpt %>% 
+  mutate(
+    grand_mean  =  sum(data_MC_excerpt[-1] %>% pull(mean_reaction_time)) /3,
+    `goNoGo-reaction` = `goNoGo-reaction`,
+    `discrimination-goNoGo` = `discrimination-goNoGo`
+  )
+
+data_MC_excerpt
+#aida::get_samples_regression_noninformative(data_MC_excerpt, )
+```
+
+```{r}
+
+IDA_data_KoF <- read_csv('data_KoF-IDA-2020.csv') %>% 
+  # discard practice trials
+  filter(type != "practice") %>% 
+  mutate(
+    # add a 'condition' variable
+    condition = case_when(
+      type == "special" ~ "background check",
+      type == "main" ~ str_c("Condition ", condition),
+      TRUE ~ "filler"
+    ) %>% 
+      factor( 
+        ordered = T,
+        levels = c(str_c("Condition ", c(0, 1, 6, 9, 10)), "background check", "filler")
+      )
+  ) %>% 
+  rename(correct_answer = correct)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
