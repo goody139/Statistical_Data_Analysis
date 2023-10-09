@@ -4,5 +4,5 @@ This repository contains homeworks course Statistics and Data Analysis by Prof. 
 ## Structure 
 The homeworks can be found in the respective folder. 
 
-## Contributor 
+## Author
 Lisa Golla 
